@@ -25,6 +25,10 @@ const questionBankSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  expectedAnswer: {
+    type: String,
+    default: ''
+  },
   sampleAnswerPoints: [String],
   timeLimit: {
     type: Number, // in seconds

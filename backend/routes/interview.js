@@ -389,6 +389,33 @@ router.put('/:id/questions/:questionId/response',
 
       // Add some strengths based on analysis
       const strengths = [];
+      
+      // Score the answer against expected answer if available
+      const { scoreAnswer } = require('../utils/answerScoring');
+      const questionData = interview.questions[questionIndex].questionData;
+      
+      if (questionData && questionData.expectedAnswer && responseData.text) {
+        const scoringResult = scoreAnswer(responseData.text, questionData.expectedAnswer);
+        
+        // Add scoring results to the analysis
+        interview.questions[questionIndex].analysis.answerScore = {
+          score: scoringResult.score,
+          grade: scoringResult.grade || 'C', // Use the grade from scoring system
+          feedback: scoringResult.feedback,
+          keywordMatches: scoringResult.keywordMatches,
+          missingKeywords: scoringResult.missingKeywords
+        };
+        
+        // Add answer quality to strengths or areas for improvement
+        if (scoringResult.score >= 7) {
+          strengths.push('Strong answer content');
+        }
+        
+        // Add grade-based strengths
+        if (scoringResult.grade && ['A+', 'A', 'A-', 'B+'].includes(scoringResult.grade)) {
+          strengths.push('Excellent answer quality');
+        }
+      }
       if (analysis.confidence.score >= 7) strengths.push('Confident delivery');
       if (analysis.communication.clarity >= 7) strengths.push('Clear communication');
       if (analysis.sentiment && analysis.sentiment.positivity > 0.6) strengths.push('Positive attitude');
@@ -530,7 +557,38 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
       
       const avgClarity = answeredQuestions.reduce((sum, q) => 
         sum + (q.analysis?.communication?.clarity || 0), 0) / answeredQuestions.length;
-
+        
+      // Calculate average answer score if available
+      const questionsWithScores = answeredQuestions.filter(q => q.analysis?.answerScore?.score);
+      const avgAnswerScore = questionsWithScores.length > 0
+        ? questionsWithScores.reduce((sum, q) => sum + q.analysis.answerScore.score, 0) / questionsWithScores.length
+        : null;
+        
+      // Calculate overall grade based on answer scores
+      let overallGrade = 'C';
+      if (questionsWithScores.length > 0) {
+        // Count grades by frequency
+        const gradeCount = {};
+        questionsWithScores.forEach(q => {
+          const grade = q.analysis?.answerScore?.grade || 'C';
+          gradeCount[grade] = (gradeCount[grade] || 0) + 1;
+        });
+        
+        // Find the most frequent grade
+        let maxCount = 0;
+        Object.entries(gradeCount).forEach(([grade, count]) => {
+          if (count > maxCount) {
+            maxCount = count;
+            overallGrade = grade;
+          }
+        });
+        
+        // If average score is very high, ensure grade is at least A-
+        if (avgAnswerScore >= 9) {
+          overallGrade = overallGrade < 'A-' ? 'A-' : overallGrade;
+        }
+      }
+      
       // Calculate total word count properly from all responses
       const totalWordCount = answeredQuestions.reduce((sum, q) => {
         let wordCount = 0;
@@ -560,9 +618,28 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
         ? multimediaQuestions.reduce((sum, q) => 
             sum + (q.analysis.nonVerbal?.overallPresence || 0), 0) / multimediaQuestions.length
         : 0;
+        
+      // Generate overall analysis
+      interview.overallAnalysis = {
+        confidence: avgConfidence,
+        clarity: avgClarity,
+        answerScore: avgAnswerScore,
+        grade: overallGrade,
+        totalWordCount,
+        totalFillerWords,
+        answeredQuestions: answeredQuestions.length,
+        totalQuestions: interview.questions.length,
+        completionRate: (answeredQuestions.length / interview.questions.length) * 100,
+        duration: interview.duration || 0
+      };
 
       // Generate enhanced feedback summary
       let summary = `You completed ${answeredQuestions.length} questions with an average confidence score of ${avgConfidence.toFixed(1)}/10 and clarity score of ${avgClarity.toFixed(1)}/10.`;
+      
+      // Include answer quality score if available
+      if (avgAnswerScore !== null) {
+        summary += ` Your answer content received an average score of ${avgAnswerScore.toFixed(1)}/10 (Grade: ${overallGrade}) based on expected answers.`;
+      }
       
       if (totalWordCount > 0) {
         summary += ` You provided a total of ${totalWordCount} words across all responses.`;
@@ -584,6 +661,12 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
       if (avgClarity < 7) {
         recommendations.push('Work on structuring your answers more clearly using the STAR method');
         nextSteps.push('Practice organizing your thoughts before speaking');
+      }
+
+      // Add recommendations based on answer content score
+      if (avgAnswerScore !== null && avgAnswerScore < 7) {
+        recommendations.push('Focus on addressing key points expected in your answers');
+        nextSteps.push('Review common questions and prepare comprehensive answers');
       }
 
       if (totalFillerWords > answeredQuestions.length * 3) {

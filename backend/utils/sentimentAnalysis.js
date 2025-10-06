@@ -90,6 +90,16 @@ class SentimentAnalyzer {
     confidenceScore = Math.max(0, Math.min(10, confidenceScore));
 
     // Calculate clarity score based on structure and filler words
+    // First, detect nonsensical or random text
+    const realWordPattern = /\b[a-z]{3,}\b/g;
+    const realWords = text.toLowerCase().match(realWordPattern) || [];
+    const realWordRatio = realWords.length / Math.max(1, wordCount);
+    
+    // If text appears to be nonsensical (few real words or very short)
+    if (text.length < 15 || realWordRatio < 0.5 || realWords.length < 2) {
+      return 2.0; // Very low clarity score for nonsensical text
+    }
+    
     // Dynamic baseline based on text structure
     const sentenceCount = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
     const avgWordsPerSentence = wordCount / Math.max(1, sentenceCount);

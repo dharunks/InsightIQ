@@ -243,7 +243,7 @@ const InterviewSession = () => {
       toast.success('Interview completed!')
       
       // Navigate to results page instead of interviews list
-      navigate(`/interview/${id}/results`)
+      navigate(`/interviews/${id}/results`)
     } catch (error) {
       console.error('Complete interview error:', error)
       console.error('Error response:', error.response?.data)
