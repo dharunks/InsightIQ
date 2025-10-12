@@ -95,22 +95,31 @@ class SentimentAnalyzer {
     const realWords = text.toLowerCase().match(realWordPattern) || [];
     const realWordRatio = realWords.length / Math.max(1, wordCount);
     
+    let clarityScore;
+    
     // If text appears to be nonsensical (few real words or very short)
     if (text.length < 15 || realWordRatio < 0.5 || realWords.length < 2) {
-      return 2.0; // Very low clarity score for nonsensical text
+      clarityScore = 2.0; // Very low clarity score for nonsensical text
+    } else {
+      // Dynamic baseline based on text structure
+      const sentenceCount = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
+      const avgWordsPerSentence = wordCount / Math.max(1, sentenceCount);
+      const sentenceStructureFactor = Math.min(1, Math.max(0.5, 20 / Math.max(1, avgWordsPerSentence))); // Optimal ~15-20 words per sentence
+      
+      clarityScore = 7 * sentenceStructureFactor; // Dynamic baseline
+      
+      // Apply penalties with safeguards against extreme values
+      const fillerPenalty = Math.min(5, (fillerCount / Math.max(1, wordCount)) * 25); // Cap filler penalty at 5
+      const uncertaintyPenalty = Math.min(3, uncertaintyCount * 0.3); // Cap uncertainty penalty at 3
+      
+      clarityScore -= fillerPenalty;
+      clarityScore -= uncertaintyPenalty;
+      
+      // Add slight randomness to avoid identical scores (±0.5)
+      clarityScore += (Math.random() - 0.5);
     }
     
-    // Dynamic baseline based on text structure
-    const sentenceCount = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
-    const avgWordsPerSentence = wordCount / Math.max(1, sentenceCount);
-    const sentenceStructureFactor = Math.min(1, Math.max(0.5, 20 / Math.max(1, avgWordsPerSentence))); // Optimal ~15-20 words per sentence
-    
-    let clarityScore = 7 * sentenceStructureFactor; // Dynamic baseline
-    clarityScore -= (fillerCount / Math.max(1, wordCount)) * 25; // Increased penalty for fillers
-    clarityScore -= uncertaintyCount * 0.3; // Increased penalty for uncertainty
-    
-    // Add slight randomness to avoid identical scores (±0.5)
-    clarityScore += (Math.random() - 0.5);
+    // Ensure score is within valid range
     clarityScore = Math.max(0, Math.min(10, clarityScore));
 
     // Determine emotional tone

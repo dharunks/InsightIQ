@@ -92,6 +92,18 @@ function scoreAnswer(userAnswer, expectedAnswer, options = {}) {
     finalScore = Math.max(finalScore, 9.5);
   }
   
+  // Boost score for comprehensive answers that cover all key points
+  if (keywordScore > 0.8 && contentScore > 0.7) {
+    finalScore = Math.min(maxScore, finalScore + 0.5);
+  }
+  
+  // Penalize answers that are too verbose without substance
+  const userWordCount = normalizedUserAnswer.split(/\s+/).length;
+  const expectedWordCount = normalizedExpectedAnswer.split(/\s+/).length;
+  if (userWordCount > expectedWordCount * 2 && keywordScore < 0.6) {
+    finalScore = Math.max(minScore, finalScore - 1.0);
+  }
+  
   // Generate grade based on score
   const grade = scoreToGrade(finalScore);
   
