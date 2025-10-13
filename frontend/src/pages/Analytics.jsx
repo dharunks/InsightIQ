@@ -7,7 +7,8 @@ import {
   Clock,
   MessageSquare,
   Calendar,
-  Download
+  Download,
+  Star
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -58,6 +59,7 @@ const Analytics = () => {
             averageConfidence: 7.3,
             averageClarity: 8.1,
             averageSentiment: 6.8,
+            averageAnswerScore: 7.5,
             improvementTrend: 15.2
           },
           charts: {
@@ -73,6 +75,12 @@ const Analytics = () => {
               { date: '2024-01-20', value: 8.5, label: 'Technical' },
               { date: '2024-01-22', value: 8.8, label: 'Situational' }
             ],
+            answerScoreOverTime: [
+              { date: '2024-01-15', value: 6.8, label: 'HR Interview' },
+              { date: '2024-01-18', value: 7.2, label: 'Behavioral' },
+              { date: '2024-01-20', value: 7.6, label: 'Technical' },
+              { date: '2024-01-22', value: 8.0, label: 'Situational' }
+            ],
             interviewTypeDistribution: [
               { type: 'hr', count: 4, percentage: '33.3' },
               { type: 'behavioral', count: 3, percentage: '25.0' },
@@ -83,12 +91,14 @@ const Analytics = () => {
               { strength: 'Clear communication', count: 8 },
               { strength: 'Detailed responses', count: 6 },
               { strength: 'Confident delivery', count: 5 },
-              { strength: 'Positive attitude', count: 4 }
+              { strength: 'Positive attitude', count: 4 },
+              { strength: 'Strong answer content', count: 7 }
             ],
             improvementAreas: [
               { improvement: 'Reduce filler words', count: 6 },
               { improvement: 'Provide more examples', count: 4 },
-              { improvement: 'Speak with more conviction', count: 3 }
+              { improvement: 'Speak with more conviction', count: 3 },
+              { improvement: 'Address key points in answers', count: 5 }
             ]
           }
         })
@@ -149,6 +159,21 @@ const Analytics = () => {
       }
     ]
   }
+
+  // Only create answer score chart if data exists
+  const answerScoreChartData = charts.answerScoreOverTime ? {
+    labels: charts.answerScoreOverTime.map(item => new Date(item.date).toLocaleDateString()),
+    datasets: [
+      {
+        label: 'Answer Quality Score',
+        data: charts.answerScoreOverTime.map(item => item.value),
+        borderColor: 'rgb(245, 158, 11)',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        tension: 0.4,
+        fill: true
+      }
+    ]
+  } : null
 
   const interviewTypeChartData = {
     labels: charts.interviewTypeDistribution.map(item => item.type.charAt(0).toUpperCase() + item.type.slice(1)),
@@ -285,7 +310,7 @@ const Analytics = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatCard
             icon={MessageSquare}
             title="Total Interviews"
@@ -305,6 +330,14 @@ const Analytics = () => {
             value={`${stats.averageClarity}/10`}
             subtitle="Communication clarity"
           />
+          {stats.averageAnswerScore !== undefined && (
+            <StatCard
+              icon={Star}
+              title="Avg Answer Quality"
+              value={`${stats.averageAnswerScore}/10`}
+              subtitle="Content relevance score"
+            />
+          )}
           <StatCard
             icon={TrendingUp}
             title="Sentiment Score"
@@ -337,11 +370,24 @@ const Analytics = () => {
             <Line data={clarityChartData} options={chartOptions} />
           </motion.div>
 
+          {/* Answer Quality Over Time - only show if data exists */}
+          {answerScoreChartData && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+            >
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Answer Quality Progression</h3>
+              <Line data={answerScoreChartData} options={chartOptions} />
+            </motion.div>
+          )}
+
           {/* Interview Type Distribution */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
+            transition={{ delay: 0.4 }}
             className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Interview Types</h3>
@@ -356,8 +402,8 @@ const Analytics = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
+            transition={{ delay: 0.5 }}
+            className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 lg:col-span-2"
           >
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Strengths</h3>
             <Bar data={strengthsChartData} options={barChartOptions} />
@@ -368,11 +414,11 @@ const Analytics = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.6 }}
           className="bg-white rounded-lg shadow-sm border border-gray-200 p-6"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Areas for Improvement</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {charts.improvementAreas.map((area, index) => (
               <div key={index} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <div className="flex items-center justify-between">

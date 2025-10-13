@@ -7,6 +7,7 @@ const QuestionBank = require('../models/QuestionBank');
 const User = require('../models/User');
 const { authMiddleware } = require('../middleware/auth');
 const sentimentAnalyzer = require('../utils/sentimentAnalysis');
+const { calculateOverallGradeFromScores } = require('../../shared/gradeUtils');
 
 const router = express.Router();
 
@@ -109,7 +110,7 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get random questions from question bank
+    // Get random questions from question bank with expected answers
     const questions = await QuestionBank.aggregate([
       { 
         $match: { 
@@ -128,12 +129,21 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    // Format questions for interview
+    // Format questions for interview with expected answers
     const formattedQuestions = questions.map((q, index) => ({
       id: `q${index + 1}`,
       text: q.question,
       category: q.subcategory,
-      expectedTime: q.timeLimit || 120
+      expectedTime: q.timeLimit || 120,
+      expectedAnswer: q.expectedAnswer || '', // Include expected answer
+      questionData: { // Store full question data for scoring
+        category: q.category,
+        subcategory: q.subcategory,
+        difficulty: q.difficulty,
+        expectedAnswer: q.expectedAnswer || '',
+        expectedAnswerStructure: q.expectedAnswerStructure || '',
+        sampleAnswerPoints: q.sampleAnswerPoints || []
+      }
     }));
 
     // Create interview
@@ -355,14 +365,17 @@ router.put('/:id/questions/:questionId/response',
           analysis = await sentimentAnalyzer.analyzeMultimediaResponse(text || '', mediaPath, mediaType);
         } else {
           console.log('Performing text-only analysis');
-          analysis = sentimentAnalyzer.analyzeText(text || '');
+          // Pass the question type to the analyzer
+          const questionType = interview.type; // technical, behavioral, hr, etc.
+          analysis = sentimentAnalyzer.analyzeText(text || '', questionType);
         }
         console.log('Analysis completed successfully');
       } catch (analysisError) {
         console.error('Analysis error:', analysisError);
         // Fallback to text analysis if multimedia analysis fails
         console.log('Falling back to text-only analysis');
-        analysis = sentimentAnalyzer.analyzeText(text || '');
+        const questionType = interview.type; // technical, behavioral, hr, etc.
+        analysis = sentimentAnalyzer.analyzeText(text || '', questionType);
       }
 
       // Update question with response and analysis
@@ -392,7 +405,8 @@ router.put('/:id/questions/:questionId/response',
       
       // Score the answer against expected answer if available
       const { scoreAnswer } = require('../utils/answerScoring');
-      const questionData = interview.questions[questionIndex].questionData;
+      // Fix: properly access question data
+      const questionData = interview.questions[questionIndex];
       
       if (questionData && questionData.expectedAnswer && responseData.text) {
         const scoringResult = scoreAnswer(responseData.text, questionData.expectedAnswer);
@@ -559,33 +573,25 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
         sum + (q.analysis?.communication?.clarity || 0), 0) / answeredQuestions.length;
         
       // Calculate average answer score if available
-      const questionsWithScores = answeredQuestions.filter(q => q.analysis?.answerScore?.score);
+      const questionsWithScores = answeredQuestions.filter(q => q.analysis?.answerScore?.score !== undefined);
       const avgAnswerScore = questionsWithScores.length > 0
         ? questionsWithScores.reduce((sum, q) => sum + q.analysis.answerScore.score, 0) / questionsWithScores.length
         : null;
         
-      // Calculate overall grade based on answer scores
+      // Calculate overall grade based on answer scores using shared utility
       let overallGrade = 'C';
       if (questionsWithScores.length > 0) {
-        // Count grades by frequency
-        const gradeCount = {};
-        questionsWithScores.forEach(q => {
-          const grade = q.analysis?.answerScore?.grade || 'C';
-          gradeCount[grade] = (gradeCount[grade] || 0) + 1;
-        });
-        
-        // Find the most frequent grade
-        let maxCount = 0;
-        Object.entries(gradeCount).forEach(([grade, count]) => {
-          if (count > maxCount) {
-            maxCount = count;
-            overallGrade = grade;
-          }
-        });
+        overallGrade = calculateOverallGradeFromScores(questionsWithScores.map(q => q.analysis.answerScore));
         
         // If average score is very high, ensure grade is at least A-
         if (avgAnswerScore >= 9) {
-          overallGrade = overallGrade < 'A-' ? 'A-' : overallGrade;
+          // Only upgrade if the current grade is lower than A-
+          const gradeOrder = ["F", "D", "C-", "C", "C+", "B-", "B", "B+", "A-", "A", "A+"];
+          const currentGradeIndex = gradeOrder.indexOf(overallGrade);
+          const aMinusIndex = gradeOrder.indexOf("A-");
+          if (currentGradeIndex < aMinusIndex) {
+            overallGrade = 'A-';
+          }
         }
       }
       

@@ -15,7 +15,8 @@ import {
   BarChart3,
   Brain,
   Eye,
-  Settings
+  Settings,
+  Star
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import InterviewMediaRecorder from '../components/MediaRecorder'
@@ -620,7 +621,7 @@ const InterviewSession = () => {
                 <h4 className="text-lg font-semibold text-gray-900">AI Analysis Complete</h4>
               </div>
               
-              <div className="grid md:grid-cols-3 gap-4 mb-4">
+              <div className="grid md:grid-cols-4 gap-4 mb-4">
                 <div className="text-center p-4 bg-white rounded-lg border">
                   <div className="text-2xl font-bold text-blue-600">
                     {analysis.confidence?.score?.toFixed(1) || 0}/10
@@ -639,7 +640,33 @@ const InterviewSession = () => {
                   </div>
                   <div className="text-sm text-gray-600">Words</div>
                 </div>
+                {analysis.answerScore?.score !== undefined && (
+                  <div className="text-center p-4 bg-white rounded-lg border">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {analysis.answerScore.score.toFixed(1)}/10
+                    </div>
+                    <div className="text-sm text-gray-600">Answer Quality</div>
+                  </div>
+                )}
               </div>
+              
+              {/* Answer Quality Feedback */}
+              {analysis.answerScore && (
+                <div className="mb-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <h5 className="font-semibold text-gray-900 mb-2 flex items-center">
+                    <Star className="w-4 h-4 mr-1 text-yellow-600" />
+                    Answer Quality Feedback
+                  </h5>
+                  <p className="text-sm text-gray-700 mb-2">
+                    {analysis.answerScore.feedback || 'No specific feedback available.'}
+                  </p>
+                  {analysis.answerScore.grade && (
+                    <div className="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full font-medium">
+                      Grade: {analysis.answerScore.grade}
+                    </div>
+                  )}
+                </div>
+              )}
               
               {analysis.suggestedImprovements?.length > 0 && (
                 <div>

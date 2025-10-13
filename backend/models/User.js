@@ -64,6 +64,10 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    technicalInterviews: {
+      type: Number,
+      default: 0
+    },
     averageConfidence: {
       type: Number,
       default: 0

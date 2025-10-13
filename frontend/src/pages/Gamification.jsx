@@ -10,37 +10,20 @@ const Gamification = () => {
   const { user } = useAuthStore()
   const [userStats, setUserStats] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('progress')
 
   useEffect(() => {
     const loadGamificationData = async () => {
       try {
         const response = await api.get('/analysis/gamification')
+        console.log('Gamification data:', response.data) // Add logging to see the actual data
+        console.log('Badges earned:', response.data.badgesEarned)
         setUserStats(response.data)
+        setError(null)
       } catch (error) {
         console.error('Failed to load gamification data:', error)
-        // Use mock data for demonstration
-        setUserStats({
-          totalInterviews: 12,
-          averageConfidence: 7.3,
-          averageClarity: 8.1,
-          averageSentiment: 6.8,
-          improvementTrend: 15.2,
-          streakDays: 5,
-          badgesEarned: 4,
-          perfectScores: 1,
-          technicalInterviews: 3,
-          todayInterviews: 1,
-          todayPracticeTime: 45,
-          weekInterviews: 3,
-          weekImprovement: 0.8,
-          monthInterviews: 12,
-          monthBadges: 2,
-          level: 3,
-          experiencePoints: 1250,
-          nextLevelXP: 1500,
-          rank: 'Intermediate Interviewer'
-        })
+        setError('Failed to load gamification data. Please try again later.')
       } finally {
         setIsLoading(false)
       }
@@ -59,6 +42,34 @@ const Gamification = () => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Data</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!userStats) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">No Data Available</h2>
+          <p className="text-gray-600">Complete some interviews to see your progress.</p>
+        </div>
       </div>
     )
   }

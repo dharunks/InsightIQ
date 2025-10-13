@@ -140,7 +140,10 @@ const BadgeSystem = ({ userStats, onBadgeEarned }) => {
       case 'average_clarity':
         return stats.averageClarity >= requirement.value
       case 'perfect_score':
-        return stats.perfectScores >= 1
+        // Check if any score is at or above the perfect value
+        return stats.averageConfidence >= requirement.value || 
+               stats.averageClarity >= requirement.value || 
+               stats.averageAnswerScore >= requirement.value
       case 'streak_days':
         return stats.streakDays >= requirement.value
       case 'improvement_percentage':

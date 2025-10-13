@@ -2,6 +2,8 @@
  * Utility for scoring user answers against expected answers
  */
 
+const { scoreToGrade } = require('../../shared/gradeUtils');
+
 /**
  * Calculates a score by comparing a user's answer to the expected answer
  * @param {string} userAnswer - The answer provided by the user
@@ -104,7 +106,7 @@ function scoreAnswer(userAnswer, expectedAnswer, options = {}) {
     finalScore = Math.max(minScore, finalScore - 1.0);
   }
   
-  // Generate grade based on score
+  // Generate grade based on score using shared utility
   const grade = scoreToGrade(finalScore);
   
   // Generate feedback based on the score
@@ -190,7 +192,8 @@ function levenshteinDistance(a, b) {
  * @param {number} score - Numerical score (0-10)
  * @returns {string} Letter grade
  */
-function scoreToGrade(score) {
+// DEPRECATED: Use shared gradeUtils.scoreToGrade instead
+function scoreToGradeOld(score) {
   if (score >= 9.5) return "A+";
   if (score >= 9.0) return "A";
   if (score >= 8.5) return "A-";

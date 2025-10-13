@@ -31,6 +31,7 @@ const interviewSchema = new mongoose.Schema({
     },
     category: String,
     expectedTime: Number, // in seconds
+    expectedAnswer: String, // Add this field
     response: {
       text: String,
       audioUrl: String,
@@ -82,7 +83,15 @@ const interviewSchema = new mongoose.Schema({
       overallScore: Number, // 0 to 10 comprehensive score
       keywords: [String],
       suggestedImprovements: [String],
-      strengths: [String]
+      strengths: [String],
+      // Add the missing answerScore field
+      answerScore: {
+        score: Number, // 0 to 10
+        grade: String, // Letter grade
+        feedback: String,
+        keywordMatches: [String],
+        missingKeywords: [String]
+      }
     }
   }],
   status: {

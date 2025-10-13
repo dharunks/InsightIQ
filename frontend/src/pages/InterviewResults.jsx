@@ -16,11 +16,13 @@ import {
   Mic,
   Eye,
   User,
-  Zap
+  Zap,
+  Star
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import api from '../utils/api'
 import toast from 'react-hot-toast'
+import { getPerformanceGrade, calculateOverallGradeFromScores } from '../utils/gradeUtils'
 
 const InterviewResults = () => {
   const { id } = useParams()
@@ -49,19 +51,18 @@ const InterviewResults = () => {
           return
         }
         
-        // Check if any questions have analysis
-        const hasAnalysis = interviewData.questions.some(q => q.analysis)
-        if (!hasAnalysis) {
-          toast.error('Interview analysis is not available')
-          navigate(`/interview/${id}`)
-          return
-        }
-        
         setInterview(interviewData)
       } catch (error) {
         console.error('Failed to load interview results:', error)
-        toast.error('Failed to load interview results. Please try again later.')
-        setTimeout(() => navigate('/interviews'), 2000)
+        
+        let message = 'Failed to load interview results'
+        if (error.response?.data?.message) {
+          message = error.response.data.message
+        } else if (error.code === 'ERR_NETWORK') {
+          message = 'Cannot connect to server. Please check if the backend is running.'
+        }
+        
+        toast.error(message)
       } finally {
         setIsLoading(false)
       }
@@ -72,7 +73,7 @@ const InterviewResults = () => {
     }
   }, [id, navigate])
 
-  // Calculate overall statistics (enhanced for multimedia)
+  // Calculate overall statistics
   const calculateOverallStats = (questions) => {
     const answeredQuestions = questions.filter(q => q.response && q.analysis)
     
@@ -81,6 +82,7 @@ const InterviewResults = () => {
         avgConfidence: 0,
         avgClarity: 0,
         avgPresence: 0,
+        avgAnswerScore: 0,
         totalWords: 0,
         avgResponseTime: 0,
         strengthsCount: 0,
@@ -97,6 +99,12 @@ const InterviewResults = () => {
 
     const avgClarity = answeredQuestions.reduce((sum, q) => 
       sum + (q.analysis?.communication?.clarity || 0), 0) / answeredQuestions.length
+
+    // Calculate average answer score
+    const questionsWithScores = answeredQuestions.filter(q => q.analysis?.answerScore?.score !== undefined)
+    const avgAnswerScore = questionsWithScores.length > 0
+      ? questionsWithScores.reduce((sum, q) => sum + q.analysis.answerScore.score, 0) / questionsWithScores.length
+      : 0
 
     // Calculate average presence (for video responses)
     const videoQuestions = answeredQuestions.filter(q => q.analysis?.nonVerbal)
@@ -124,6 +132,7 @@ const InterviewResults = () => {
       avgConfidence: avgConfidence.toFixed(1),
       avgClarity: avgClarity.toFixed(1),
       avgPresence: avgPresence.toFixed(1),
+      avgAnswerScore: avgAnswerScore.toFixed(1),
       totalWords,
       avgResponseTime: Math.round(avgResponseTime),
       strengthsCount: allStrengths.length,
@@ -135,20 +144,6 @@ const InterviewResults = () => {
       videoCount,
       audioCount
     }
-  }
-
-  // Get performance grade
-  const getPerformanceGrade = (confidence, clarity) => {
-    const average = (parseFloat(confidence) + parseFloat(clarity)) / 2
-    if (average >= 9) return { grade: 'A+', color: 'text-green-600', bg: 'bg-green-100' }
-    if (average >= 8.5) return { grade: 'A', color: 'text-green-600', bg: 'bg-green-100' }
-    if (average >= 8) return { grade: 'A-', color: 'text-green-600', bg: 'bg-green-100' }
-    if (average >= 7.5) return { grade: 'B+', color: 'text-blue-600', bg: 'bg-blue-100' }
-    if (average >= 7) return { grade: 'B', color: 'text-blue-600', bg: 'bg-blue-100' }
-    if (average >= 6.5) return { grade: 'B-', color: 'text-blue-600', bg: 'bg-blue-100' }
-    if (average >= 6) return { grade: 'C+', color: 'text-yellow-600', bg: 'bg-yellow-100' }
-    if (average >= 5.5) return { grade: 'C', color: 'text-yellow-600', bg: 'bg-yellow-100' }
-    return { grade: 'C-', color: 'text-red-600', bg: 'bg-red-100' }
   }
 
   // Format time display
@@ -163,7 +158,7 @@ const InterviewResults = () => {
     if (!interview) return
 
     const downloadStats = calculateOverallStats(interview.questions)
-    const downloadGrade = getPerformanceGrade(downloadStats.avgConfidence, downloadStats.avgClarity)
+    const downloadGrade = getPerformanceGrade(downloadStats.avgConfidence, downloadStats.avgClarity, downloadStats.avgAnswerScore)
     
     // Create downloadable content
     let content = 'INTERVIEW RESULTS REPORT\\n========================\\n\\n'
@@ -176,6 +171,7 @@ const InterviewResults = () => {
     content += 'PERFORMANCE SUMMARY\\n==================\\n'
     content += 'Confidence Score: ' + downloadStats.avgConfidence + '/10\\n'
     content += 'Clarity Score: ' + downloadStats.avgClarity + '/10\\n'
+    content += 'Answer Quality: ' + downloadStats.avgAnswerScore + '/10\\n'
     content += 'Questions Answered: ' + downloadStats.answeredCount + '/' + downloadStats.totalCount + '\\n'
     content += 'Average Response Time: ' + formatTime(downloadStats.avgResponseTime) + '\\n'
     content += 'Total Words: ' + downloadStats.totalWords + '\\n\\n'
@@ -215,7 +211,11 @@ const InterviewResults = () => {
         content += 'Response Time: ' + formatTime(question.response.duration || 0) + '\\n'
         content += 'Word Count: ' + (question.analysis.communication?.wordCount || 0) + '\\n'
         content += 'Confidence: ' + (question.analysis.confidence?.score?.toFixed(1) || 0) + '/10\\n'
-        content += 'Clarity: ' + (question.analysis.communication?.clarity?.toFixed(1) || 0) + '/10\\n\\n'
+        content += 'Clarity: ' + (question.analysis.communication?.clarity?.toFixed(1) || 0) + '/10\\n'
+        if (question.analysis.answerScore?.score !== undefined) {
+          content += 'Answer Quality: ' + question.analysis.answerScore.score.toFixed(1) + '/10 (' + (question.analysis.answerScore.grade || 'N/A') + ')\\n'
+        }
+        content += '\\n'
         
         const strengths = question.analysis.strengths?.join(', ') || 'None identified'
         const improvements = question.analysis.suggestedImprovements?.join('; ') || 'None suggested'
@@ -250,9 +250,9 @@ const InterviewResults = () => {
     if (!interview) return
 
     const shareStats = calculateOverallStats(interview.questions)
-    const shareGrade = getPerformanceGrade(shareStats.avgConfidence, shareStats.avgClarity)
+    const shareGrade = getPerformanceGrade(shareStats.avgConfidence, shareStats.avgClarity, shareStats.avgAnswerScore)
     
-    const shareText = '🎯 Interview Results Summary\\n\\n📋 ' + interview.title + '\\n🎓 Grade: ' + shareGrade.grade + '\\n💪 Confidence: ' + shareStats.avgConfidence + '/10\\n🗣️ Clarity: ' + shareStats.avgClarity + '/10\\n✅ Completed: ' + shareStats.answeredCount + '/' + shareStats.totalCount + ' questions\\n\\nPractice makes perfect! 🚀'
+    const shareText = '🎯 Interview Results Summary\\n\\n📋 ' + interview.title + '\\n🎓 Grade: ' + shareGrade.grade + '\\n💪 Confidence: ' + shareStats.avgConfidence + '/10\\n🗣️ Clarity: ' + shareStats.avgClarity + '/10\\n⭐ Answer Quality: ' + shareStats.avgAnswerScore + '/10\\n✅ Completed: ' + shareStats.answeredCount + '/' + shareStats.totalCount + ' questions\\n\\nPractice makes perfect! 🚀'
 
     try {
       await navigator.clipboard.writeText(shareText)
@@ -299,7 +299,7 @@ const InterviewResults = () => {
   }
 
   const stats = calculateOverallStats(interview.questions)
-  const performanceGrade = getPerformanceGrade(stats.avgConfidence, stats.avgClarity)
+  const performanceGrade = getPerformanceGrade(stats.avgConfidence, stats.avgClarity, stats.avgAnswerScore)
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -314,27 +314,29 @@ const InterviewResults = () => {
             <span>Back to Interviews</span>
           </button>
         </div>
-        <div className="flex space-x-3">
-          <button onClick={shareResults} className="btn-secondary">
-            <Share2 className="w-4 h-4 mr-2" />
-            Share Results
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={shareResults}
+            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Share2 className="w-4 h-4" />
+            <span>Share</span>
           </button>
-          <button onClick={downloadResults} className="btn-secondary">
-            <Download className="w-4 h-4 mr-2" />
-            Download Report
+          <button
+            onClick={downloadResults}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            <span>Download</span>
           </button>
         </div>
       </div>
 
-      {/* Interview Title & Summary */}
-      <motion.div 
-        className="card mb-8"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <div className="flex items-center justify-between mb-6">
+      {/* Interview Header */}
+      <div className="card mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{interview.title}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">{interview.title}</h1>
             <div className="flex items-center space-x-4 text-sm text-gray-600">
               <span className="capitalize">{interview.type} Interview</span>
               <span>•</span>
@@ -364,98 +366,64 @@ const InterviewResults = () => {
             </div>
             <div className="text-sm text-gray-600">Clarity</div>
           </div>
-          {stats.hasMultimedia && stats.avgPresence > 0 && (
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600 mb-1">
-                {stats.avgPresence}/10
-              </div>
-              <div className="text-sm text-gray-600">Presence</div>
+          <div className="text-center p-4 bg-yellow-50 rounded-lg">
+            <div className="text-2xl font-bold text-yellow-600 mb-1">
+              {stats.avgAnswerScore}/10
             </div>
-          )}
-          <div className="text-center p-4 bg-indigo-50 rounded-lg">
-            <div className="text-2xl font-bold text-indigo-600 mb-1">
+            <div className="text-sm text-gray-600">Answer Quality</div>
+          </div>
+          <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600 mb-1">
               {stats.answeredCount}/{stats.totalCount}
             </div>
-            <div className="text-sm text-gray-600">Questions Answered</div>
+            <div className="text-sm text-gray-600">Answered</div>
           </div>
           <div className="text-center p-4 bg-orange-50 rounded-lg">
             <div className="text-2xl font-bold text-orange-600 mb-1">
               {formatTime(stats.avgResponseTime)}
             </div>
-            <div className="text-sm text-gray-600">Avg Response Time</div>
+            <div className="text-sm text-gray-600">Avg. Time</div>
           </div>
         </div>
-        
-        {/* Multimedia Summary */}
-        {stats.hasMultimedia && (
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-              <Zap className="w-5 h-5 mr-2 text-yellow-600" />
-              Multimedia Response Summary
-            </h3>
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="flex items-center justify-center space-x-2">
-                <Video className="w-5 h-5 text-blue-600" />
-                <span className="text-sm text-gray-700">{stats.videoCount} Video Response{stats.videoCount !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <Mic className="w-5 h-5 text-green-600" />
-                <span className="text-sm text-gray-700">{stats.audioCount} Audio Response{stats.audioCount !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="flex items-center justify-center space-x-2">
-                <MessageSquare className="w-5 h-5 text-purple-600" />
-                <span className="text-sm text-gray-700">{stats.answeredCount - stats.multimediaCount} Text Only</span>
-              </div>
-            </div>
-          </div>
-        )}
-      </motion.div>
+      </div>
 
-      {/* AI Feedback Summary */}
+      {/* AI Feedback */}
       {interview.feedback?.ai && (
-        <motion.div 
-          className="card mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <Target className="w-5 h-5 mr-2 text-blue-600" />
-            AI Feedback Summary
-          </h2>
+        <div className="card mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">AI Feedback Summary</h3>
           
-          <div className="bg-blue-50 rounded-lg p-4 mb-6">
+          <div className="prose max-w-none mb-6">
             <p className="text-gray-700">{interview.feedback.ai.summary}</p>
           </div>
-
+          
           <div className="grid md:grid-cols-2 gap-6">
             {interview.feedback.ai.recommendations?.length > 0 && (
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-600" />
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <Target className="w-4 h-4 mr-2 text-blue-500" />
                   Key Recommendations
-                </h3>
+                </h4>
                 <ul className="space-y-2">
                   {interview.feedback.ai.recommendations.map((rec, index) => (
-                    <li key={index} className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <li key={index} className="flex items-start">
+                      <span className="text-blue-500 mr-2">•</span>
                       <span className="text-gray-700">{rec}</span>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-
+            
             {interview.feedback.ai.nextSteps?.length > 0 && (
               <div>
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
-                  <TrendingUp className="w-4 h-4 mr-2 text-blue-600" />
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center">
+                  <Zap className="w-4 h-4 mr-2 text-green-500" />
                   Next Steps
-                </h3>
+                </h4>
                 <ul className="space-y-2">
                   {interview.feedback.ai.nextSteps.map((step, index) => (
-                    <li key={index} className="flex items-start space-x-2">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                    <li key={index} className="flex items-start">
+                      <span className="text-green-500 mr-2">•</span>
                       <span className="text-gray-700">{step}</span>
                     </li>
                   ))}
@@ -463,205 +431,141 @@ const InterviewResults = () => {
               </div>
             )}
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* Question-by-Question Analysis */}
-      <motion.div 
-        className="card"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-          <MessageSquare className="w-5 h-5 mr-2 text-purple-600" />
-          Question-by-Question Analysis
-        </h2>
-
-        <div className="space-y-6">
-          {interview.questions.map((question, index) => (
-            <div key={question.id} className="border border-gray-200 rounded-lg p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <h3 className="font-semibold text-gray-900">
-                      Question {index + 1}
-                    </h3>
-                    {question.response?.videoUrl && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                        <Video className="w-3 h-3" />
-                        <span>Video</span>
-                      </span>
-                    )}
-                    {question.response?.audioUrl && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        <Mic className="w-3 h-3" />
-                        <span>Audio</span>
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">Question-by-Question Analysis</h3>
+        
+        <div className="space-y-8">
+          {interview.questions.map((question, index) => {
+            const hasResponse = question.response && question.analysis;
+            
+            return (
+              <div key={question.id} className="border-b border-gray-200 pb-8 last:border-b-0 last:pb-0">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h4 className="font-medium text-gray-900 mb-1">
+                      Question {index + 1}: {question.text}
+                    </h4>
+                    {question.category && (
+                      <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                        {question.category}
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-700 mb-3">{question.text}</p>
-                  {question.category && (
-                    <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
-                      {question.category}
-                    </span>
+                  
+                  {hasResponse && question.analysis.answerScore?.grade && (
+                    <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      question.analysis.answerScore.grade === 'A+' || question.analysis.answerScore.grade === 'A' || question.analysis.answerScore.grade === 'A-' ? 'bg-green-100 text-green-800' :
+                      question.analysis.answerScore.grade === 'B+' || question.analysis.answerScore.grade === 'B' || question.analysis.answerScore.grade === 'B-' ? 'bg-blue-100 text-blue-800' :
+                      question.analysis.answerScore.grade === 'C+' || question.analysis.answerScore.grade === 'C' || question.analysis.answerScore.grade === 'C-' ? 'bg-yellow-100 text-yellow-800' :
+                      question.analysis.answerScore.grade === 'D+' || question.analysis.answerScore.grade === 'D' ? 'bg-orange-100 text-orange-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {question.analysis.answerScore.grade}
+                    </div>
                   )}
                 </div>
-                {question.analysis && (
-                  <div className="flex space-x-4 text-center">
-                    <div>
-                      <div className="text-lg font-bold text-blue-600">
-                        {question.analysis.confidence?.score?.toFixed(1) || 0}/10
-                      </div>
-                      <div className="text-xs text-gray-600">Confidence</div>
-                    </div>
-                    <div>
-                      <div className="text-lg font-bold text-green-600">
-                        {question.analysis.communication?.clarity?.toFixed(1) || 0}/10
-                      </div>
-                      <div className="text-xs text-gray-600">Clarity</div>
-                    </div>
-                    {question.analysis.nonVerbal && (
-                      <div>
-                        <div className="text-lg font-bold text-purple-600">
-                          {question.analysis.nonVerbal.overallPresence?.toFixed(1) || 0}/10
+                
+                {hasResponse ? (
+                  <>
+                    <div className="mb-4">
+                      <h5 className="font-medium text-gray-900 mb-2">Your Response:</h5>
+                      <div className="bg-gray-50 p-4 rounded-lg">
+                        <p className="text-gray-700 whitespace-pre-wrap">{question.response.text}</p>
+                        <div className="flex items-center mt-2 text-sm text-gray-500">
+                          <Clock className="w-4 h-4 mr-1" />
+                          <span>{formatTime(question.response.duration || 0)}</span>
+                          <span className="mx-2">•</span>
+                          <MessageSquare className="w-4 h-4 mr-1" />
+                          <span>{question.analysis.communication?.wordCount || 0} words</span>
                         </div>
-                        <div className="text-xs text-gray-600">Presence</div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-3 gap-4 mb-6">
+                      <div className="text-center p-3 bg-blue-50 rounded-lg">
+                        <div className="text-lg font-bold text-blue-600">
+                          {question.analysis.confidence?.score?.toFixed(1) || 0}/10
+                        </div>
+                        <div className="text-xs text-gray-600">Confidence</div>
+                      </div>
+                      <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="text-lg font-bold text-green-600">
+                          {question.analysis.communication?.clarity?.toFixed(1) || 0}/10
+                        </div>
+                        <div className="text-xs text-gray-600">Clarity</div>
+                      </div>
+                      {question.analysis.answerScore?.score !== undefined && (
+                        <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                          <div className="text-lg font-bold text-yellow-600">
+                            {question.analysis.answerScore.score.toFixed(1)}/10
+                          </div>
+                          <div className="text-xs text-gray-600">Answer Quality</div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {question.analysis.answerScore?.feedback && (
+                      <div className="mb-6">
+                        <h5 className="font-semibold text-gray-900 mb-2">
+                          Answer Quality Feedback
+                        </h5>
+                        <p className="text-sm text-gray-700 mb-2">
+                          {question.analysis.answerScore.feedback}
+                        </p>
+                        {question.analysis.answerScore.grade && (
+                          <div className="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full font-medium">
+                            Grade: {question.analysis.answerScore.grade}
+                          </div>
+                        )}
                       </div>
                     )}
+                    
+                    {(question.analysis.strengths?.length > 0 || question.analysis.suggestedImprovements?.length > 0) && (
+                      <div className="grid md:grid-cols-2 gap-4">
+                        {question.analysis.strengths?.length > 0 && (
+                          <div>
+                            <h5 className="font-semibold text-gray-900 mb-2 flex items-center">
+                              <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                              Strengths
+                            </h5>
+                            <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                              {question.analysis.strengths.slice(0, 3).map((strength, index) => (
+                                <li key={index}>{strength}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
+                        {question.analysis.suggestedImprovements?.length > 0 && (
+                          <div>
+                            <h5 className="font-semibold text-gray-900 mb-2 flex items-center">
+                              <Target className="w-4 h-4 mr-2 text-blue-500" />
+                              Improvement Areas
+                            </h5>
+                            <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                              {question.analysis.suggestedImprovements.slice(0, 3).map((improvement, index) => (
+                                <li key={index}>{improvement}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-4">
+                    <MessageSquare className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-gray-500">Question not answered</p>
                   </div>
                 )}
               </div>
-
-              {question.response ? (
-                <>
-                  <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                    <h4 className="font-medium text-gray-900 mb-2">Your Response:</h4>
-                    <p className="text-gray-700">{question.response.text}</p>
-                    <div className="flex items-center space-x-4 mt-3 text-sm text-gray-600">
-                      <span className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        {formatTime(question.response.duration || 0)}
-                      </span>
-                      <span>{question.analysis?.communication?.wordCount || 0} words</span>
-                      {question.analysis?.communication?.wordsPerMinute && (
-                        <span>{question.analysis.communication.wordsPerMinute} WPM</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Video/Audio specific analysis */}
-                  {(question.response.videoUrl || question.response.audioUrl) && question.analysis && (
-                    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-4">
-                      <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                        {question.response.videoUrl ? (
-                          <>
-                            <Video className="w-4 h-4 mr-2 text-blue-600" />
-                            Video Analysis
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="w-4 h-4 mr-2 text-green-600" />
-                            Audio Analysis
-                          </>
-                        )}
-                      </h4>
-                                          
-                      {question.analysis.nonVerbal && (
-                        <div className="grid grid-cols-2 gap-4 mb-3">
-                          <div className="text-center p-3 bg-white rounded-lg">
-                            <div className="text-lg font-bold text-purple-600">
-                              {question.analysis.nonVerbal.eyeContact?.score?.toFixed(1) || 'N/A'}/10
-                            </div>
-                            <div className="text-xs text-gray-600 flex items-center justify-center">
-                              <Eye className="w-3 h-3 mr-1" />
-                              Eye Contact
-                            </div>
-                          </div>
-                          <div className="text-center p-3 bg-white rounded-lg">
-                            <div className="text-lg font-bold text-indigo-600">
-                              {question.analysis.nonVerbal.posture?.score?.toFixed(1) || 'N/A'}/10
-                            </div>
-                            <div className="text-xs text-gray-600 flex items-center justify-center">
-                              <User className="w-3 h-3 mr-1" />
-                              Posture
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                                          
-                      {question.analysis.mediaAnalysis && (
-                        <div className="text-sm text-gray-700">
-                          <p><span className="font-medium">Media Quality:</span> {question.analysis.mediaAnalysis.quality?.toFixed(1) || 'N/A'}/10</p>
-                          <p><span className="font-medium">Duration:</span> {formatTime(question.analysis.mediaAnalysis.duration || 0)}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {question.analysis && (
-                    <>
-                      {question.analysis.strengths?.length > 0 && (
-                        <div className="mb-4">
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <CheckCircle className="w-4 h-4 mr-1 text-green-600" />
-                            Strengths:
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {question.analysis.strengths.map((strength, idx) => (
-                              <span key={idx} className="px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full">
-                                {strength}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {question.analysis.suggestedImprovements?.length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                            <TrendingUp className="w-4 h-4 mr-1 text-blue-600" />
-                            Improvement Areas:
-                          </h4>
-                          <ul className="space-y-1">
-                            {question.analysis.suggestedImprovements.map((improvement, idx) => (
-                              <li key={idx} className="text-sm text-gray-700 flex items-start">
-                                <div className="w-1.5 h-1.5 bg-blue-600 rounded-full mt-2 mr-2 flex-shrink-0"></div>
-                                {improvement}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
-              ) : (
-                <div className="text-center py-4 text-gray-500">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>Question not answered</p>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
-      </motion.div>
-
-      {/* Action buttons */}
-      <div className="flex justify-center space-x-4 mt-8">
-        <button 
-          onClick={() => navigate('/analytics')}
-          className="btn-primary"
-        >
-          <BarChart3 className="w-4 h-4 mr-2" />
-          View Overall Analytics
-        </button>
-        <button 
-          onClick={() => navigate('/interviews')}
-          className="btn-secondary"
-        >
-          Practice Again
-        </button>
       </div>
     </div>
   )

@@ -34,6 +34,7 @@ const ProgressTracker = ({ userStats, goals, onGoalUpdate }) => {
         { id: 'monthly_badges', name: 'Earn 3 new badges', target: 3, current: 0, type: 'badges' }
       ])
     } else {
+      // Use provided goals
       setDailyGoals(goals.daily || [])
       setWeeklyGoals(goals.weekly || [])
       setMonthlyGoals(goals.monthly || [])
@@ -65,7 +66,12 @@ const ProgressTracker = ({ userStats, goals, onGoalUpdate }) => {
         case 'interviews':
           return { ...goal, current: stats.weekInterviews || 0 }
         case 'improvement':
-          return { ...goal, current: stats.weekImprovement || 0 }
+          // The goal is to improve confidence by 0.5
+          // We need to make sure the current value doesn't exceed the target
+          const improvementValue = stats.weekImprovement || 0
+          // Cap the current value at the target to prevent showing >100% progress
+          const cappedImprovement = Math.min(improvementValue, goal.target)
+          return { ...goal, current: cappedImprovement }
         default:
           return goal
       }
@@ -218,7 +224,7 @@ const ProgressTracker = ({ userStats, goals, onGoalUpdate }) => {
         className="bg-white rounded-lg border border-gray-200 p-6"
       >
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Progress Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{userStats?.totalInterviews || 0}</div>
             <div className="text-sm text-gray-600">Total Interviews</div>
@@ -226,6 +232,10 @@ const ProgressTracker = ({ userStats, goals, onGoalUpdate }) => {
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">{userStats?.averageConfidence?.toFixed(1) || '0.0'}</div>
             <div className="text-sm text-gray-600">Avg Confidence</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-yellow-600">{userStats?.averageAnswerScore?.toFixed(1) || '0.0'}</div>
+            <div className="text-sm text-gray-600">Avg Answer Quality</div>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-purple-600">{userStats?.badgesEarned || 0}</div>

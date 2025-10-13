@@ -27,6 +27,13 @@ router.get('/profile', authMiddleware, async (req, res) => {
       status: 'completed' 
     });
 
+    // Count technical interviews
+    const technicalInterviews = await Interview.countDocuments({
+      user: userId,
+      status: 'completed',
+      type: 'technical'
+    });
+
     const recentInterviews = await Interview.find({ 
       user: userId, 
       status: 'completed' 
@@ -67,6 +74,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
     // Update user stats
     await User.findByIdAndUpdate(userId, {
       'stats.totalInterviews': totalInterviews,
+      'stats.technicalInterviews': technicalInterviews,
       'stats.averageConfidence': parseFloat(avgConfidence.toFixed(1)),
       'stats.averageClarity': parseFloat(avgClarity.toFixed(1)),
       'stats.improvementTrend': parseFloat(improvementTrend.toFixed(1))
@@ -385,8 +393,17 @@ async function checkForNewBadges(userId) {
       criteria: () => {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
-        const recentInterviews = interviews.filter(i => new Date(i.completedAt) >= weekAgo);
+        const recentInterviews = interviews.filter(i => new Date(i.createdAt) >= weekAgo);
         return recentInterviews.length >= 5;
+      }
+    },
+    {
+      name: 'Technical Expert',
+      description: 'Complete 5 technical interviews',
+      icon: '⚙️',
+      criteria: () => {
+        const technicalInterviews = interviews.filter(i => i.type === 'technical');
+        return technicalInterviews.length >= 5;
       }
     }
   ];
@@ -414,7 +431,7 @@ function getAvailableBadges() {
     { name: 'Interview Veteran', description: 'Complete 10 interviews', icon: '🏆' },
     { name: 'Perfectionist', description: 'Get an A+ grade', icon: '⭐' },
     { name: 'Consistent Performer', description: 'Complete 5 interviews in a week', icon: '📈' },
-    { name: 'Technical Expert', description: 'Excel in technical interviews', icon: '⚙️' },
+    { name: 'Technical Expert', description: 'Complete 5 technical interviews', icon: '⚙️' },
     { name: 'People Person', description: 'Excel in behavioral interviews', icon: '👥' },
     { name: 'Improvement Master', description: 'Show 50% improvement trend', icon: '📊' },
     { name: 'Marathon Runner', description: 'Complete 25 interviews', icon: '🏃' }
@@ -456,4 +473,8 @@ function calculateAchievements(user, interviews) {
   return achievements;
 }
 
+// Export the router as default and functions as named exports
 module.exports = router;
+module.exports.checkForNewBadges = checkForNewBadges;
+module.exports.getAvailableBadges = getAvailableBadges;
+module.exports.calculateAchievements = calculateAchievements;

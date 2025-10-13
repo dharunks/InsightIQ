@@ -8,51 +8,61 @@ import {
   Clock, 
   Target,
   Plus,
-  ArrowRight
+  ArrowRight,
+  Star
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import api from '../utils/api'
 
 const Dashboard = () => {
   const { user } = useAuthStore()
   const [stats, setStats] = useState({
-    totalInterviews: 5,
-    averageConfidence: 7.2,
-    averageClarity: 8.1,
-    improvementTrend: 15
+    totalInterviews: 0,
+    averageConfidence: 0,
+    averageClarity: 0,
+    averageAnswerScore: 0,
+    improvementTrend: 0
   })
 
-  const [recentInterviews] = useState([
-    {
-      id: 1,
-      title: 'Software Engineer Technical Interview',
-      type: 'technical',
-      difficulty: 'intermediate',
-      completedAt: '2024-01-20',
-      grade: 'B+',
-      confidence: 7.8,
-      clarity: 8.2
-    },
-    {
-      id: 2,
-      title: 'Product Manager Behavioral Interview',
-      type: 'behavioral',
-      difficulty: 'beginner',
-      completedAt: '2024-01-18',
-      grade: 'A-',
-      confidence: 8.5,
-      clarity: 8.8
-    },
-    {
-      id: 3,
-      title: 'HR General Interview',
-      type: 'hr',
-      difficulty: 'beginner',
-      completedAt: '2024-01-15',
-      grade: 'B',
-      confidence: 6.5,
-      clarity: 7.5
+  const [recentInterviews, setRecentInterviews] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        // Fetch dashboard analytics
+        const response = await api.get('/analysis/dashboard')
+        const { stats, charts } = response.data
+        
+        setStats({
+          totalInterviews: stats.totalInterviews || 0,
+          averageConfidence: stats.averageConfidence || 0,
+          averageClarity: stats.averageClarity || 0,
+          averageAnswerScore: stats.averageAnswerScore || 0,
+          improvementTrend: stats.improvementTrend || 0
+        })
+        
+        // Fetch recent interviews
+        const profileResponse = await api.get('/users/profile')
+        setRecentInterviews(profileResponse.data.recentInterviews || [])
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error)
+        // Use default values
+        setStats({
+          totalInterviews: 0,
+          averageConfidence: 0,
+          averageClarity: 0,
+          averageAnswerScore: 0,
+          improvementTrend: 0
+        })
+        setRecentInterviews([])
+      } finally {
+        setLoading(false)
+      }
     }
-  ])
+
+    fetchDashboardData()
+  }, [])
 
   const quickActions = [
     {
@@ -115,6 +125,16 @@ const Dashboard = () => {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Welcome Section */}
@@ -128,7 +148,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
         <div className="card">
           <div className="flex items-center">
             <div className="p-3 rounded-lg bg-blue-100">
@@ -161,6 +181,18 @@ const Dashboard = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Avg. Clarity</p>
               <p className="text-2xl font-bold text-gray-900">{stats.averageClarity}/10</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center">
+            <div className="p-3 rounded-lg bg-yellow-100">
+              <Star className="w-6 h-6 text-yellow-600" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Avg. Answer Quality</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.averageAnswerScore}/10</p>
             </div>
           </div>
         </div>
@@ -242,14 +274,16 @@ const Dashboard = () => {
             <div className="space-y-4">
               {recentInterviews.map((interview) => (
                 <div
-                  key={interview.id}
+                  key={interview._id}
                   className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="font-medium text-gray-900">{interview.title}</h4>
-                    <span className={`status-badge ${getGradeColor(interview.grade)}`}>
-                      {interview.grade}
-                    </span>
+                    {interview.overallAnalysis?.grade && (
+                      <span className={`status-badge ${getGradeColor(interview.overallAnalysis.grade)}`}>
+                        {interview.overallAnalysis.grade}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
@@ -258,36 +292,50 @@ const Dashboard = () => {
                     </span>
                     <span className="flex items-center">
                       <Clock className="w-4 h-4 mr-1" />
-                      {interview.completedAt}
+                      {interview.completedAt ? new Date(interview.completedAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Confidence</p>
-                      <div className="flex items-center">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full"
-                            style={{ width: `${interview.confidence * 10}%` }}
-                          ></div>
+                  {interview.overallAnalysis && (
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500">Confidence</p>
+                        <div className="flex items-center">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
+                            <div
+                              className="bg-blue-600 h-2 rounded-full"
+                              style={{ width: `${(interview.overallAnalysis.averageConfidence || 0) * 10}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium">{interview.overallAnalysis.averageConfidence?.toFixed(1) || '0.0'}</span>
                         </div>
-                        <span className="text-sm font-medium">{interview.confidence}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Clarity</p>
+                        <div className="flex items-center">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
+                            <div
+                              className="bg-green-600 h-2 rounded-full"
+                              style={{ width: `${(interview.overallAnalysis.averageClarity || 0) * 10}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium">{interview.overallAnalysis.averageClarity?.toFixed(1) || '0.0'}</span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Answer Quality</p>
+                        <div className="flex items-center">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
+                            <div
+                              className="bg-yellow-600 h-2 rounded-full"
+                              style={{ width: `${(interview.overallAnalysis.answerScore || 0) * 10}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-sm font-medium">{interview.overallAnalysis.answerScore?.toFixed(1) || '0.0'}</span>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Clarity</p>
-                      <div className="flex items-center">
-                        <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                          <div
-                            className="bg-green-600 h-2 rounded-full"
-                            style={{ width: `${interview.clarity * 10}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-medium">{interview.clarity}</span>
-                      </div>
-                    </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

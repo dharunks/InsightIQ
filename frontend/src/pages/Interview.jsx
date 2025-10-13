@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, Filter, Search, MessageSquare, Clock, Target, X } from 'lucide-react'
+import { Plus, Filter, Search, MessageSquare, Clock, Target, X, Star } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import api from '../utils/api'
 import toast from 'react-hot-toast'
@@ -208,6 +208,18 @@ const Interview = () => {
     }
   }
 
+  const getGradeColor = (grade) => {
+    if (!grade) return 'bg-gray-100 text-gray-800';
+    
+    // Define grade colors based on academic grading system
+    if (['A+', 'A', 'A-'].includes(grade)) return 'bg-green-100 text-green-800';
+    if (['B+', 'B', 'B-'].includes(grade)) return 'bg-blue-100 text-blue-800';
+    if (['C+', 'C', 'C-'].includes(grade)) return 'bg-yellow-100 text-yellow-800';
+    if (['D'].includes(grade)) return 'bg-orange-100 text-orange-800';
+    if (['F'].includes(grade)) return 'bg-red-100 text-red-800';
+    return 'bg-gray-100 text-gray-800';
+  }
+
   const filteredInterviews = interviews.filter(interview => {
     const matchesSearch = interview.title.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesType = filterType === 'all' || interview.type === filterType
@@ -309,9 +321,10 @@ const Interview = () => {
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-medium text-gray-900">{interview.title}</h4>
                 <div className="flex items-center space-x-2">
-                  {interview.grade && (
-                    <span className="status-badge bg-green-100 text-green-800">
-                      {interview.grade}
+                  {interview.overallAnalysis?.grade && (
+                    <span className={`status-badge flex items-center ${getGradeColor(interview.overallAnalysis.grade)}`}>
+                      <Star className="w-3 h-3 mr-1" />
+                      {interview.overallAnalysis.grade}
                     </span>
                   )}
                   <span className={`status-badge ${getStatusColor(interview.status)}`}>
@@ -336,6 +349,36 @@ const Interview = () => {
                   </span>
                 )}
               </div>
+
+              {/* Additional metrics for completed interviews */}
+              {interview.status === 'completed' && interview.overallAnalysis && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 text-xs">
+                  <div className="bg-blue-50 p-2 rounded text-center">
+                    <div className="font-medium text-blue-800">
+                      {interview.overallAnalysis.averageConfidence?.toFixed(1) || 'N/A'}/10
+                    </div>
+                    <div className="text-blue-600">Confidence</div>
+                  </div>
+                  <div className="bg-green-50 p-2 rounded text-center">
+                    <div className="font-medium text-green-800">
+                      {interview.overallAnalysis.averageClarity?.toFixed(1) || 'N/A'}/10
+                    </div>
+                    <div className="text-green-600">Clarity</div>
+                  </div>
+                  <div className="bg-yellow-50 p-2 rounded text-center">
+                    <div className="font-medium text-yellow-800">
+                      {interview.overallAnalysis.answerScore?.toFixed(1) || 'N/A'}/10
+                    </div>
+                    <div className="text-yellow-600">Answer Quality</div>
+                  </div>
+                  <div className="bg-purple-50 p-2 rounded text-center">
+                    <div className="font-medium text-purple-800">
+                      {interview.overallAnalysis.answeredQuestions || 0}/{interview.overallAnalysis.totalQuestions || interview.questionCount || 0}
+                    </div>
+                    <div className="text-purple-600">Answered</div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div className="flex space-x-3">

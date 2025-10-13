@@ -31,7 +31,7 @@ class SentimentAnalyzer {
   }
 
   // Analyze text sentiment with detailed metrics
-  analyzeText(text) {
+  analyzeText(text, questionType = 'general') {
     if (!text || typeof text !== 'string') {
       return this.getDefaultAnalysis();
     }
@@ -75,31 +75,60 @@ class SentimentAnalyzer {
     // Normalize sentiment score to 0-1 range
     const normalizedScore = Math.max(0, Math.min(1, (customScore + 10) / 20));
     
-    // Calculate confidence score (0-10) based on actual text content
-    // Start with a dynamic baseline based on text length and sentiment
-    const textLengthFactor = Math.min(1, Math.max(0.3, wordCount / 100)); // Normalize by expected word count
-    let confidenceScore = 5 * textLengthFactor * (0.7 + normalizedScore * 0.3); // Dynamic baseline
-    
-    // Adjust based on confidence indicators
-    confidenceScore += confidenceCount * 0.5;
-    confidenceScore -= uncertaintyCount * 0.5; // Increased penalty for uncertainty
-    confidenceScore -= (fillerCount / Math.max(1, wordCount)) * 15; // Increased penalty for fillers
-    
-    // Add slight randomness to avoid identical scores (±0.5)
-    confidenceScore += (Math.random() - 0.5);
-    confidenceScore = Math.max(0, Math.min(10, confidenceScore));
-
-    // Calculate clarity score based on structure and filler words
-    // First, detect nonsensical or random text
+    // Detect nonsensical or random text
     const realWordPattern = /\b[a-z]{3,}\b/g;
     const realWords = text.toLowerCase().match(realWordPattern) || [];
     const realWordRatio = realWords.length / Math.max(1, wordCount);
     
+    // Check if text is nonsensical
+    const isNonsensical = text.length < 15 || realWordRatio < 0.5 || realWords.length < 2;
+    
+    // Calculate base confidence score with question type consideration
+    let confidenceScore;
+    
+    if (isNonsensical) {
+      // Very low confidence score for nonsensical text
+      confidenceScore = 1.0;
+    } else if (questionType === 'technical' || questionType === 'programming') {
+      // For technical questions, base confidence on answer quality indicators
+      const technicalTerms = [
+        'function', 'variable', 'array', 'object', 'class', 'method', 'loop', 'condition',
+        'database', 'query', 'table', 'index', 'schema', 'relational', 'nosql',
+        'algorithm', 'data structure', 'complexity', 'performance'
+      ];
+      
+      const technicalTermCount = this.countKeywords(text, technicalTerms);
+      const hasStructure = text.includes('.') && text.length > 50;
+      const completenessIndicator = wordCount > 40 ? 1 : 0;
+      
+      // Base score for technical answers is higher
+      confidenceScore = 6 + (technicalTermCount * 0.2) + (hasStructure ? 1 : 0) + (completenessIndicator ? 1 : 0);
+      
+      // Apply modifiers
+      confidenceScore += confidenceCount * 0.3;
+      confidenceScore -= uncertaintyCount * 0.2;
+      confidenceScore -= (fillerCount / Math.max(1, wordCount)) * 8;
+    } else {
+      // For behavioral questions, use original calculation
+      const textLengthFactor = Math.min(1, Math.max(0.3, wordCount / 100));
+      confidenceScore = 5 * textLengthFactor * (0.7 + normalizedScore * 0.3);
+      
+      // Adjust based on confidence indicators
+      confidenceScore += confidenceCount * 0.5;
+      confidenceScore -= uncertaintyCount * 0.3;
+      confidenceScore -= (fillerCount / Math.max(1, wordCount)) * 10;
+    }
+    
+    // Add slight randomness to avoid identical scores (±0.3)
+    confidenceScore += (Math.random() - 0.5) * 0.6;
+    confidenceScore = Math.max(0, Math.min(10, confidenceScore));
+
+    // Calculate clarity score based on structure and filler words
     let clarityScore;
     
     // If text appears to be nonsensical (few real words or very short)
-    if (text.length < 15 || realWordRatio < 0.5 || realWords.length < 2) {
-      clarityScore = 2.0; // Very low clarity score for nonsensical text
+    if (isNonsensical) {
+      clarityScore = 1.0; // Very low clarity score for nonsensical text
     } else {
       // Dynamic baseline based on text structure
       const sentenceCount = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
@@ -109,14 +138,14 @@ class SentimentAnalyzer {
       clarityScore = 7 * sentenceStructureFactor; // Dynamic baseline
       
       // Apply penalties with safeguards against extreme values
-      const fillerPenalty = Math.min(5, (fillerCount / Math.max(1, wordCount)) * 25); // Cap filler penalty at 5
-      const uncertaintyPenalty = Math.min(3, uncertaintyCount * 0.3); // Cap uncertainty penalty at 3
+      const fillerPenalty = Math.min(3, (fillerCount / Math.max(1, wordCount)) * 15); // Reduced cap filler penalty
+      const uncertaintyPenalty = Math.min(2, uncertaintyCount * 0.2); // Reduced uncertainty penalty
       
       clarityScore -= fillerPenalty;
       clarityScore -= uncertaintyPenalty;
       
-      // Add slight randomness to avoid identical scores (±0.5)
-      clarityScore += (Math.random() - 0.5);
+      // Add slight randomness to avoid identical scores (±0.3)
+      clarityScore += (Math.random() - 0.5) * 0.6;
     }
     
     // Ensure score is within valid range
