@@ -5,6 +5,7 @@ import { useAuthStore } from './stores/authStore'
 
 // Components
 import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 import ProtectedRoute from './components/ProtectedRoute'
 
 // Pages
@@ -30,10 +31,10 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 flex flex-col">
         <Navbar />
         
-        <main className="pt-16">
+        <main className="flex-grow pt-16">
           <Routes>
             {/* Public routes */}
             <Route 
@@ -119,6 +120,8 @@ function App() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+
+        <Footer />
 
         {/* Toast notifications */}
         <Toaster

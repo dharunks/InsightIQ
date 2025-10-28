@@ -1,331 +1,137 @@
-/**
- * Utility for scoring user answers against expected answers
- */
+// ============================================
+// answerScoring.js
+// ============================================
+// Version: 3.0
+// Purpose: Evaluate responses for all 9 HR + Technical questions
+// ============================================
 
-const { scoreToGrade } = require('../../shared/gradeUtils');
+import natural from "natural";
+import Sentiment from "sentiment";
 
-/**
- * Calculates a score by comparing a user's answer to the expected answer
- * @param {string} userAnswer - The answer provided by the user
- * @param {string} expectedAnswer - The expected answer from the question bank
- * @param {Object} options - Scoring options
- * @param {number} options.keywordWeight - Weight for keyword matching (default: 0.5)
- * @param {number} options.contentWeight - Weight for overall content similarity (default: 0.3)
- * @param {number} options.exactMatchWeight - Weight for exact match detection (default: 0.2)
- * @returns {Object} Score details including numerical score and feedback
- */
-function scoreAnswer(userAnswer, expectedAnswer, options = {}) {
-  // Default options
-  const { 
-    keywordWeight = 0.5, 
-    contentWeight = 0.3,
-    exactMatchWeight = 0.2,
-    minScore = 0,
-    maxScore = 10
-  } = options;
-  
-  // If either answer is missing, return a zero score
-  if (!userAnswer || !expectedAnswer) {
-    return {
-      score: minScore,
-      feedback: "Unable to score: missing user answer or expected answer",
-      keywordMatches: [],
-      missingKeywords: [],
-      grade: "F"
-    };
-  }
+const sentiment = new Sentiment();
+const tokenizer = new natural.WordTokenizer();
+const TfIdf = natural.TfIdf;
+const tfidf = new TfIdf();
 
-  // Normalize text for comparison (lowercase, remove extra spaces)
-  const normalizedUserAnswer = userAnswer.toLowerCase().trim();
-  const normalizedExpectedAnswer = expectedAnswer.toLowerCase().trim();
-  
-  // Penalize very short answers (less than 15 characters)
-  if (normalizedUserAnswer.length < 15) {
-    return {
-      score: 2.0, // Very low score for extremely short answers
-      feedback: "Answer is too brief to properly address the question.",
-      keywordMatches: [],
-      missingKeywords: extractKeyPhrases(normalizedExpectedAnswer),
-      grade: "F"
-    };
-  }
-  
-  // Penalize nonsensical answers (random characters, no real words)
-  const realWordPattern = /\b[a-z]{3,}\b/g;
-  const realWords = normalizedUserAnswer.match(realWordPattern) || [];
-  if (realWords.length < 2) {
-    return {
-      score: 1.0, // Extremely low score for nonsensical answers
-      feedback: "Answer appears to be nonsensical or random characters.",
-      keywordMatches: [],
-      missingKeywords: extractKeyPhrases(normalizedExpectedAnswer),
-      grade: "F"
-    };
-  }
-  
-  // Check for exact or near-exact match
-  const exactMatchScore = calculateExactMatchScore(normalizedUserAnswer, normalizedExpectedAnswer);
-  
-  // Extract key phrases/keywords from expected answer
-  const keyPhrases = extractKeyPhrases(normalizedExpectedAnswer);
-  
-  // Calculate keyword match score
-  const { matchedKeywords, missingKeywords, keywordScore } = calculateKeywordScore(
-    normalizedUserAnswer, 
-    keyPhrases
-  );
-  
-  // Calculate content similarity score
-  const contentScore = calculateContentSimilarity(
-    normalizedUserAnswer, 
-    normalizedExpectedAnswer
-  );
-  
-  // Calculate weighted final score
-  let finalScore = (keywordScore * keywordWeight) + 
-                   (contentScore * contentWeight) + 
-                   (exactMatchScore * exactMatchWeight);
-  
-  // Scale to desired range
-  finalScore = Math.min(maxScore, Math.max(minScore, finalScore * maxScore));
-  
-  // If the answers are very similar, ensure a high score
-  if (exactMatchScore > 0.9) {
-    finalScore = Math.max(finalScore, 9.5);
-  }
-  
-  // Boost score for comprehensive answers that cover all key points
-  if (keywordScore > 0.8 && contentScore > 0.7) {
-    finalScore = Math.min(maxScore, finalScore + 0.5);
-  }
-  
-  // Penalize answers that are too verbose without substance
-  const userWordCount = normalizedUserAnswer.split(/\s+/).length;
-  const expectedWordCount = normalizedExpectedAnswer.split(/\s+/).length;
-  if (userWordCount > expectedWordCount * 2 && keywordScore < 0.6) {
-    finalScore = Math.max(minScore, finalScore - 1.0);
-  }
-  
-  // Generate grade based on score using shared utility
-  const grade = scoreToGrade(finalScore);
-  
-  // Generate feedback based on the score
-  const feedback = generateFeedback(finalScore, matchedKeywords, missingKeywords);
-  
-  return {
-    score: parseFloat(finalScore.toFixed(1)),
-    keywordScore: parseFloat(keywordScore.toFixed(2)),
-    contentScore: parseFloat(contentScore.toFixed(2)),
-    exactMatchScore: parseFloat(exactMatchScore.toFixed(2)),
-    feedback,
-    keywordMatches: matchedKeywords,
-    missingKeywords,
-    grade
-  };
+// ------------------------------------------------------
+// Expected Answers Dataset
+// ------------------------------------------------------
+const expectedAnswers = {
+  1: `I'm Dharun, a software engineer with a strong interest in building practical and innovative solutions. I enjoy working on projects that combine technology and problem-solving, and I'm always looking for opportunities to learn new skills and contribute to impactful work.`,
+  2: `In JavaScript, var declares variables that are function-scoped (or globally scoped if declared outside a function) and can be redeclared or updated. let declares block-scoped variables (only accessible inside the nearest {} block) and can be updated but not redeclared within the same scope, making it safer than var. const is also block-scoped but creates a read-only binding — the variable cannot be reassigned after its initial value (though objects or arrays declared with const can still have their contents changed).`,
+  3: `In my previous project, we had a very tight deadline to deliver a key module, but midway we discovered a major bug that affected core functionality. Instead of panicking, I broke the problem into smaller parts, coordinated with teammates to divide the debugging tasks, and worked extra hours to test each fix quickly. By prioritizing the most critical issues and keeping communication open with the team and stakeholders, we were able to resolve the bug and still deliver the module on time.`,
+  4: `I'm impressed by your company's reputation for innovation and its focus on delivering impactful solutions. I want to be part of a team where I can apply my skills, keep learning, and contribute to meaningful projects that make a real difference.`,
+  5: `In five years, I see myself having grown into a more skilled and experienced software engineer, taking on greater responsibilities, leading projects, and contributing to innovative solutions within your company. I also aim to continue learning new technologies and strengthening my leadership and problem-solving skills.`,
+  6: `In JavaScript, a closure is created when an inner function "remembers" and can access variables from its outer (enclosing) function even after that outer function has finished executing. This happens because functions in JavaScript form their own scope and carry a reference to the environment in which they were created. Closures are widely used to create private data, maintain state between function calls, and implement callbacks or event handlers.`,
+  7: `SQL databases are relational, use structured schemas, and store data in tables with rows and columns. They are ideal for complex queries and transactions, ensuring data consistency (ACID properties). NoSQL databases are non-relational, schema-less, and store data in formats like documents, key-value pairs, or graphs. They are highly scalable and flexible, making them suitable for handling large volumes of unstructured or rapidly changing data.`,
+  8: `In one project, I had a team member who often disagreed with others and resisted suggestions, which slowed progress. I decided to approach the situation calmly by actively listening to their concerns and finding common ground. By involving them in planning decisions and clearly communicating expectations, we were able to collaborate more effectively, complete the project on time, and even incorporate some of their valuable ideas.`,
+  9: `If I disagreed with my manager, I would first try to understand their perspective fully. Then, I would present my points respectfully, supported with data or examples, and suggest possible alternatives. Ultimately, I would be open to feedback and follow the final decision, focusing on the success of the project and team.`
+};
+
+// ------------------------------------------------------
+// Utility: Cosine similarity (semantic closeness)
+// ------------------------------------------------------
+function cosineSimilarity(textA, textB) {
+  tfidf.addDocument(textA);
+  tfidf.addDocument(textB);
+  const vectorA = [];
+  const vectorB = [];
+  tfidf.listTerms(0).forEach(item => {
+    const term = item.term;
+    const valA = tfidf.tfidf(term, 0);
+    const valB = tfidf.tfidf(term, 1);
+    vectorA.push(valA);
+    vectorB.push(valB);
+  });
+
+  const dotProduct = vectorA.reduce((sum, a, i) => sum + a * vectorB[i], 0);
+  const magA = Math.sqrt(vectorA.reduce((sum, a) => sum + a * a, 0));
+  const magB = Math.sqrt(vectorB.reduce((sum, b) => sum + b * b, 0));
+  return magA && magB ? dotProduct / (magA * magB) : 0;
 }
 
-/**
- * Calculates how closely the user answer matches the expected answer
- * @param {string} userAnswer - Normalized user answer
- * @param {string} expectedAnswer - Normalized expected answer
- * @returns {number} Exact match score (0-1)
- */
-function calculateExactMatchScore(userAnswer, expectedAnswer) {
-  // If they're identical, return perfect score
-  if (userAnswer === expectedAnswer) {
-    return 1.0;
-  }
-  
-  // Check if one is a substring of the other
-  if (userAnswer.includes(expectedAnswer) || expectedAnswer.includes(userAnswer)) {
-    const lengthRatio = Math.min(userAnswer.length, expectedAnswer.length) / 
-                        Math.max(userAnswer.length, expectedAnswer.length);
-    return 0.8 + (0.2 * lengthRatio);
-  }
-  
-  // Calculate string similarity using Levenshtein distance
-  const distance = levenshteinDistance(userAnswer, expectedAnswer);
-  const maxLength = Math.max(userAnswer.length, expectedAnswer.length);
-  const similarity = 1 - (distance / maxLength);
-  
-  return similarity;
+// ------------------------------------------------------
+// Utility: Calculate Confidence
+// ------------------------------------------------------
+function confidenceScore(answer) {
+  const wordCount = answer.split(" ").length;
+  const lengthScore = Math.min(wordCount / 20, 10);
+  const sentimentScore = Math.max(sentiment.analyze(answer).score + 5, 0);
+  const structureScore = /because|for example|therefore|so that|in conclusion/i.test(answer) ? 1.5 : 0;
+  return Math.min(lengthScore + sentimentScore / 2 + structureScore, 10);
 }
 
-/**
- * Calculates Levenshtein distance between two strings
- * @param {string} a - First string
- * @param {string} b - Second string
- * @returns {number} Levenshtein distance
- */
-function levenshteinDistance(a, b) {
-  const matrix = [];
-  
-  // Initialize matrix
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  // Fill matrix
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i-1) === a.charAt(j-1)) {
-        matrix[i][j] = matrix[i-1][j-1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i-1][j-1] + 1, // substitution
-          matrix[i][j-1] + 1,   // insertion
-          matrix[i-1][j] + 1    // deletion
-        );
-      }
-    }
-  }
-  
-  return matrix[b.length][a.length];
+// ------------------------------------------------------
+// Utility: Calculate Clarity
+// ------------------------------------------------------
+function clarityScore(answer) {
+  if (!answer || answer.trim().length < 5) return 1;
+  const avgWordLength = answer.replace(/[^a-zA-Z ]/g, "").split(" ").reduce((a, b) => a + b.length, 0) / answer.split(" ").length;
+  const punctuationBonus = (answer.match(/[.,!?]/g) || []).length > 2 ? 1 : 0;
+  return Math.min((avgWordLength / 4) + punctuationBonus + 5, 10);
 }
 
-/**
- * Converts a numerical score to a letter grade
- * @param {number} score - Numerical score (0-10)
- * @returns {string} Letter grade
- */
-// DEPRECATED: Use shared gradeUtils.scoreToGrade instead
-function scoreToGradeOld(score) {
-  if (score >= 9.5) return "A+";
-  if (score >= 9.0) return "A";
-  if (score >= 8.5) return "A-";
-  if (score >= 8.0) return "B+";
-  if (score >= 7.5) return "B";
-  if (score >= 7.0) return "B-";
-  if (score >= 6.5) return "C+";
-  if (score >= 6.0) return "C";
-  if (score >= 5.5) return "C-";
-  if (score >= 5.0) return "D+";
-  if (score >= 4.0) return "D";
+// ------------------------------------------------------
+// Utility: Grade Mapping
+// ------------------------------------------------------
+function getGrade(score) {
+  if (score >= 9) return "A+";
+  if (score >= 8) return "A";
+  if (score >= 7) return "B+";
+  if (score >= 6) return "B";
+  if (score >= 5) return "C";
+  if (score >= 4) return "D";
   return "F";
 }
 
-/**
- * Extracts key phrases from the expected answer
- * @param {string} expectedAnswer - The normalized expected answer
- * @returns {string[]} Array of key phrases
- */
-function extractKeyPhrases(expectedAnswer) {
-  // Split by common separators and filter out short or common words
-  const phrases = expectedAnswer.split(/[.,;:!?]/)
-    .map(phrase => phrase.trim())
-    .filter(phrase => phrase.length > 0);
-  
-  // Extract important words and phrases
-  const keyPhrases = [];
-  const commonWords = ['a', 'an', 'the', 'and', 'or', 'but', 'if', 'of', 'to', 'in', 'on', 'at', 'by', 'for', 'with', 'about'];
-  
-  // Process each phrase to extract keywords
-  phrases.forEach(phrase => {
-    const words = phrase.split(' ');
-    
-    // Add multi-word phrases (2-3 words)
-    for (let i = 0; i < words.length - 1; i++) {
-      if (words[i].length > 3 && !commonWords.includes(words[i])) {
-        if (i < words.length - 1 && words[i+1].length > 3) {
-          keyPhrases.push(`${words[i]} ${words[i+1]}`);
-        }
-        if (i < words.length - 2 && words[i+2].length > 3) {
-          keyPhrases.push(`${words[i]} ${words[i+1]} ${words[i+2]}`);
-        }
-      }
-    }
-    
-    // Add individual important words
-    words.forEach(word => {
-      if (word.length > 4 && !commonWords.includes(word)) {
-        keyPhrases.push(word);
-      }
-    });
-  });
-  
-  // Remove duplicates and return
-  return [...new Set(keyPhrases)];
-}
-
-/**
- * Calculates keyword matching score
- * @param {string} userAnswer - Normalized user answer
- * @param {string[]} keyPhrases - Key phrases from expected answer
- * @returns {Object} Keyword matching details and score
- */
-function calculateKeywordScore(userAnswer, keyPhrases) {
-  const matchedKeywords = [];
-  const missingKeywords = [];
-  
-  // Check each key phrase
-  keyPhrases.forEach(phrase => {
-    if (userAnswer.includes(phrase)) {
-      matchedKeywords.push(phrase);
-    } else {
-      missingKeywords.push(phrase);
-    }
-  });
-  
-  // Calculate score based on percentage of matched keywords
-  const keywordScore = keyPhrases.length > 0 
-    ? matchedKeywords.length / keyPhrases.length 
-    : 0;
-  
-  return { matchedKeywords, missingKeywords, keywordScore };
-}
-
-/**
- * Calculates overall content similarity
- * @param {string} userAnswer - Normalized user answer
- * @param {string} expectedAnswer - Normalized expected answer
- * @returns {number} Similarity score (0-1)
- */
-function calculateContentSimilarity(userAnswer, expectedAnswer) {
-  // Simple implementation using word overlap
-  // Could be enhanced with more sophisticated NLP techniques
-  
-  const userWords = new Set(userAnswer.split(/\s+/).filter(word => word.length > 3));
-  const expectedWords = new Set(expectedAnswer.split(/\s+/).filter(word => word.length > 3));
-  
-  // Count overlapping words
-  let overlapCount = 0;
-  userWords.forEach(word => {
-    if (expectedWords.has(word)) {
-      overlapCount++;
-    }
-  });
-  
-  // Calculate Jaccard similarity
-  const totalUniqueWords = new Set([...userWords, ...expectedWords]).size;
-  return totalUniqueWords > 0 ? overlapCount / totalUniqueWords : 0;
-}
-
-/**
- * Generates feedback based on the score
- * @param {number} score - The calculated score
- * @param {string[]} matchedKeywords - Keywords that were matched
- * @param {string[]} missingKeywords - Keywords that were missing
- * @returns {string} Feedback message
- */
-function generateFeedback(score, matchedKeywords, missingKeywords) {
-  // Generate appropriate feedback based on score
-  if (score >= 9) {
-    return "Excellent answer that covers all key points.";
-  } else if (score >= 7) {
-    return "Good answer that covers most key points.";
-  } else if (score >= 5) {
-    return "Adequate answer but missing some important points.";
-  } else if (score >= 3) {
-    return "Answer needs improvement and is missing several key points.";
-  } else {
-    return "Answer does not address the expected points.";
+// ------------------------------------------------------
+// MAIN FUNCTION: scoreAnswer()
+// ------------------------------------------------------
+export function scoreAnswer(questionId, answer) {
+  const expected = expectedAnswers[questionId];
+  if (!expected || !answer) {
+    return {
+      overall: 0,
+      confidence: 1,
+      clarity: 1,
+      relevance: 0,
+      grade: "F",
+      feedback: "Invalid question or empty response."
+    };
   }
+
+  const relevance = cosineSimilarity(answer.toLowerCase(), expected.toLowerCase()) * 10;
+  const confidence = confidenceScore(answer);
+  const clarity = clarityScore(answer);
+  const overall = Math.min(relevance * 0.4 + confidence * 0.3 + clarity * 0.3, 10);
+  const grade = getGrade(overall);
+
+  // Generate feedback dynamically
+  const feedback = [];
+  if (overall < 5) feedback.push("Try expanding your response with examples or context.");
+  if (confidence < 6) feedback.push("Speak more confidently and elaborate your points.");
+  if (clarity < 6) feedback.push("Structure your sentences more clearly.");
+  if (relevance < 6) feedback.push("Your answer needs more alignment with the expected concept.");
+
+  return {
+    questionId,
+    overall: parseFloat(overall.toFixed(1)),
+    confidence: parseFloat(confidence.toFixed(1)),
+    clarity: parseFloat(clarity.toFixed(1)),
+    relevance: parseFloat(relevance.toFixed(1)),
+    grade,
+    feedback: feedback.length ? feedback : ["Excellent response! Well-articulated and relevant."]
+  };
 }
 
-module.exports = {
-  scoreAnswer
-};
+// ------------------------------------------------------
+// Manual Test Example (optional)
+// ------------------------------------------------------
+if (import.meta.url === `file://${process.argv[1]}`) {
+  console.log(
+    scoreAnswer(
+      2,
+      "In JavaScript, let and const are block-scoped while var is function-scoped. const cannot be reassigned and let can be changed but not redeclared. var can be redeclared and has hoisting behavior."
+    )
+  );
+}
