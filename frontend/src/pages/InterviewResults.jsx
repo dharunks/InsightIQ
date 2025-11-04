@@ -103,7 +103,7 @@ const InterviewResults = () => {
     // Calculate average answer score
     const questionsWithScores = answeredQuestions.filter(q => q.analysis?.answerScore?.score !== undefined)
     const avgAnswerScore = questionsWithScores.length > 0
-      ? questionsWithScores.reduce((sum, q) => sum + q.analysis.answerScore.score, 0) / questionsWithScores.length
+      ? questionsWithScores.reduce((sum, q) => sum + (q.analysis.answerScore.score || 0), 0) / questionsWithScores.length
       : 0
 
     // Calculate average presence (for video responses)
@@ -129,10 +129,10 @@ const InterviewResults = () => {
     const audioCount = answeredQuestions.filter(q => q.response?.audioUrl).length
 
     return {
-      avgConfidence: avgConfidence.toFixed(1),
-      avgClarity: avgClarity.toFixed(1),
-      avgPresence: avgPresence.toFixed(1),
-      avgAnswerScore: avgAnswerScore.toFixed(1),
+      avgConfidence: parseFloat(avgConfidence.toFixed(1)),
+      avgClarity: parseFloat(avgClarity.toFixed(1)),
+      avgPresence: parseFloat(avgPresence.toFixed(1)),
+      avgAnswerScore: parseFloat(avgAnswerScore.toFixed(1)),
       totalWords,
       avgResponseTime: Math.round(avgResponseTime),
       strengthsCount: allStrengths.length,
@@ -498,10 +498,17 @@ const InterviewResults = () => {
                         </div>
                         <div className="text-xs text-gray-600">Clarity</div>
                       </div>
-                      {question.analysis.answerScore?.score !== undefined && (
+                      {question.analysis.answerScore?.score !== undefined ? (
                         <div className="text-center p-3 bg-yellow-50 rounded-lg">
                           <div className="text-lg font-bold text-yellow-600">
                             {question.analysis.answerScore.score.toFixed(1)}/10
+                          </div>
+                          <div className="text-xs text-gray-600">Answer Quality</div>
+                        </div>
+                      ) : (
+                        <div className="text-center p-3 bg-gray-100 rounded-lg">
+                          <div className="text-lg font-bold text-gray-500">
+                            N/A
                           </div>
                           <div className="text-xs text-gray-600">Answer Quality</div>
                         </div>
@@ -523,7 +530,7 @@ const InterviewResults = () => {
                         )}
                       </div>
                     )}
-                    
+
                     {(question.analysis.strengths?.length > 0 || question.analysis.suggestedImprovements?.length > 0) && (
                       <div className="grid md:grid-cols-2 gap-4">
                         {question.analysis.strengths?.length > 0 && (

@@ -88,9 +88,7 @@ const interviewSchema = new mongoose.Schema({
       answerScore: {
         score: Number, // 0 to 10
         grade: String, // Letter grade
-        feedback: String,
-        keywordMatches: [String],
-        missingKeywords: [String]
+        feedback: String
       }
     }
   }],

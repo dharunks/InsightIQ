@@ -415,9 +415,7 @@ router.put('/:id/questions/:questionId/response',
         interview.questions[questionIndex].analysis.answerScore = {
           score: scoringResult.score,
           grade: scoringResult.grade || 'C', // Use the grade from scoring system
-          feedback: scoringResult.feedback,
-          keywordMatches: scoringResult.keywordMatches,
-          missingKeywords: scoringResult.missingKeywords
+          feedback: scoringResult.feedback
         };
         
         // Add answer quality to strengths or areas for improvement
