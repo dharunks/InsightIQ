@@ -351,34 +351,6 @@ const Interview = () => {
               </div>
 
               {/* Additional metrics for completed interviews */}
-              {interview.status === 'completed' && interview.overallAnalysis && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4 text-xs">
-                  <div className="bg-blue-50 p-2 rounded text-center">
-                    <div className="font-medium text-blue-800">
-                      {interview.overallAnalysis.averageConfidence?.toFixed(1) || 'N/A'}/10
-                    </div>
-                    <div className="text-blue-600">Confidence</div>
-                  </div>
-                  <div className="bg-green-50 p-2 rounded text-center">
-                    <div className="font-medium text-green-800">
-                      {interview.overallAnalysis.averageClarity?.toFixed(1) || 'N/A'}/10
-                    </div>
-                    <div className="text-green-600">Clarity</div>
-                  </div>
-                  <div className="bg-yellow-50 p-2 rounded text-center">
-                    <div className="font-medium text-yellow-800">
-                      {interview.overallAnalysis.answerScore?.toFixed(1) || 'N/A'}/10
-                    </div>
-                    <div className="text-yellow-600">Answer Quality</div>
-                  </div>
-                  <div className="bg-purple-50 p-2 rounded text-center">
-                    <div className="font-medium text-purple-800">
-                      {interview.overallAnalysis.answeredQuestions || 0}/{interview.overallAnalysis.totalQuestions || interview.questionCount || 0}
-                    </div>
-                    <div className="text-purple-600">Answered</div>
-                  </div>
-                </div>
-              )}
 
               <div className="flex items-center justify-between">
                 <div className="flex space-x-3">
