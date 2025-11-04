@@ -625,16 +625,24 @@ router.put('/:id/complete', authMiddleware, async (req, res) => {
         
       // Generate overall analysis
       interview.overallAnalysis = {
-        confidence: avgConfidence,
-        clarity: avgClarity,
-        answerScore: avgAnswerScore,
-        grade: overallGrade,
-        totalWordCount,
-        totalFillerWords,
+        averageConfidence: parseFloat(avgConfidence.toFixed(1)),
+        averageClarity: parseFloat(avgClarity.toFixed(1)),
+        answerScore: avgAnswerScore !== null ? parseFloat(avgAnswerScore.toFixed(1)) : 0,
         answeredQuestions: answeredQuestions.length,
         totalQuestions: interview.questions.length,
-        completionRate: (answeredQuestions.length / interview.questions.length) * 100,
-        duration: interview.duration || 0
+        communicationScore: 0, // Will be calculated by pre-save hook
+        sentimentScore: 0, // Will be calculated by pre-save hook
+        multimediaScore: 0, // Will be calculated by pre-save hook
+        overallScore: 0, // Will be calculated by pre-save hook
+        strengths: [], // Will be calculated by pre-save hook
+        improvements: [], // Will be calculated by pre-save hook
+        grade: overallGrade,
+        breakdown: {
+          textAnalysis: 0, // Will be calculated by pre-save hook
+          audioQuality: 0, // Will be calculated by pre-save hook
+          videoPresence: 0, // Will be calculated by pre-save hook
+          overallPerformance: 0 // Will be calculated by pre-save hook
+        }
       };
 
       // Generate enhanced feedback summary

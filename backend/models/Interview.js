@@ -180,6 +180,12 @@ interviewSchema.pre('save', function(next) {
       const avgSentiment = completedQuestions.reduce((sum, q) => 
         sum + (q.analysis.sentiment?.overall || 0), 0) / completedQuestions.length;
       
+      // Calculate answer score
+      const questionsWithScores = completedQuestions.filter(q => q.analysis?.answerScore?.score !== undefined);
+      const avgAnswerScore = questionsWithScores.length > 0
+        ? questionsWithScores.reduce((sum, q) => sum + q.analysis.answerScore.score, 0) / questionsWithScores.length
+        : 0;
+      
       // Calculate multimedia-specific scores
       const questionsWithVideo = completedQuestions.filter(q => q.analysis.nonVerbal);
       const avgPresence = questionsWithVideo.length > 0 
@@ -236,6 +242,9 @@ interviewSchema.pre('save', function(next) {
         averageConfidence: parseFloat(avgConfidence.toFixed(1)),
         averageClarity: parseFloat(avgClarity.toFixed(1)),
         averagePresence: parseFloat(avgPresence.toFixed(1)),
+        answerScore: parseFloat(avgAnswerScore.toFixed(1)), // Add answerScore field
+        answeredQuestions: completedQuestions.length, // Add answeredQuestions field
+        totalQuestions: this.questions.length, // Add totalQuestions field
         communicationScore: parseFloat(communicationScore.toFixed(1)),
         sentimentScore: parseFloat(sentimentScore.toFixed(1)),
         multimediaScore: parseFloat(avgMediaScore.toFixed(1)),
