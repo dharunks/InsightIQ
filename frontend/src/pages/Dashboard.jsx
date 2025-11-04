@@ -297,44 +297,8 @@ const Dashboard = () => {
                   </div>
 
                   {interview.overallAnalysis && (
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500">Confidence</p>
-                        <div className="flex items-center">
-                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full"
-                              style={{ width: `${(interview.overallAnalysis.averageConfidence || 0) * 10}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium">{interview.overallAnalysis.averageConfidence?.toFixed(1) || '0.0'}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Clarity</p>
-                        <div className="flex items-center">
-                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                            <div
-                              className="bg-green-600 h-2 rounded-full"
-                              style={{ width: `${(interview.overallAnalysis.averageClarity || 0) * 10}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium">{interview.overallAnalysis.averageClarity?.toFixed(1) || '0.0'}</span>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Answer Quality</p>
-                        <div className="flex items-center">
-                          <div className="flex-1 bg-gray-200 rounded-full h-2 mr-2">
-                            <div
-                              className="bg-yellow-600 h-2 rounded-full"
-                              style={{ width: `${(interview.overallAnalysis.answerScore || 0) * 10}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-sm font-medium">{interview.overallAnalysis.answerScore?.toFixed(1) || '0.0'}</span>
-                        </div>
-                      </div>
-                    </div>
+                    <>
+                    </>
                   )}
                 </div>
               ))}
