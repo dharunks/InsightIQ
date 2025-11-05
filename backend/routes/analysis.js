@@ -450,4 +450,47 @@ router.get('/dashboard', authMiddleware, async (req, res) => {
   }
 })
 
+// Export analytics data as CSV
+router.get('/export', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id
+    const { timeframe = '30' } = req.query
+    
+    const days = parseInt(timeframe)
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    
+    // Get interviews for the user
+    const interviews = await Interview.find({
+      user: userId,
+      createdAt: { $gte: startDate },
+      status: 'completed'
+    }).sort({ createdAt: -1 })
+    
+    // Set headers for CSV download
+    res.setHeader('Content-Type', 'text/csv')
+    res.setHeader('Content-Disposition', `attachment; filename="insightiq-analytics-${new Date().toISOString().split('T')[0]}.csv"`)
+    
+    // Create CSV content
+    let csvContent = 'Date,Interview Type,Confidence,Clarity,Answer Quality,Duration (seconds),Grade\n'
+    
+    interviews.forEach(interview => {
+      const date = new Date(interview.createdAt).toLocaleDateString()
+      const type = interview.type || 'general'
+      const confidence = interview.overallAnalysis?.averageConfidence || 0
+      const clarity = interview.overallAnalysis?.averageClarity || 0
+      const answerQuality = interview.overallAnalysis?.answerScore || 0
+      const duration = interview.duration || 0
+      const grade = interview.overallAnalysis?.grade || 'N/A'
+      
+      csvContent += `"${date}","${type}",${confidence},${clarity},${answerQuality},${duration},"${grade}"\n`
+    })
+    
+    res.send(csvContent)
+  } catch (error) {
+    console.error('Error exporting analytics data:', error)
+    res.status(500).json({ message: 'Failed to export analytics data' })
+  }
+})
+
 module.exports = router

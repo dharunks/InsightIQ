@@ -110,6 +110,30 @@ const Analytics = () => {
     loadAnalytics()
   }, [timeframe])
 
+  // Export analytics data
+  const handleExport = async () => {
+    try {
+      const response = await api.get(`/analysis/export?timeframe=${timeframe}`, {
+        responseType: 'blob'
+      })
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `insightiq-analytics-${new Date().toISOString().split('T')[0]}.csv`)
+      document.body.appendChild(link)
+      link.click()
+      
+      // Clean up
+      link.parentNode.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert('Failed to export data. Please try again.')
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -301,7 +325,10 @@ const Analytics = () => {
                 <option value="90">Last 3 months</option>
                 <option value="365">Last year</option>
               </select>
-              <button className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+              <button 
+                onClick={handleExport}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </button>
